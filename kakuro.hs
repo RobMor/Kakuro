@@ -9,21 +9,26 @@ import Data.List
 {- Types -}
 type Grid = Matrix Value
 type Matrix a = [Row a]
--- every row rep as string
-type Row a = [a] 
+type Row a = [a]
 type Value = Int
 
 values :: [Value]
--- helper function
 values = [1..9]
 
-empty :: Value -> Bool
--- helper function, check if space is empty- this is currying ==
--- double equals takes 2 arg, but here == is fun x -> fun y ->
-empty = (== 0)
+empty :: Value
+empty = 0
 
+block :: Value
+block = -1
+
+isBlocked :: Value -> Bool
+isBlocked v = v == block
+
+isEmpty :: Value -> Bool
+isEmpty v = v == empty
+
+-- Helper Function
 single :: [a] -> Bool
--- helper function
 single [_] = True
 single _ = False
 
@@ -34,11 +39,10 @@ hasDuplicates (x:xt) = (elem x xt) || hasDuplicates xt
 
 -- Example Puzzle
 -- (From Wikipedia: https://en.wikipedia.org/wiki/Kakuro)
--- Asterisks represent cells in which numbers cannot be placed.
--- Dots are empty spaces ready to be filled with numbers.
--- Top and Left rows are always completely filled with asterisks
-x = 0 -- Blocked Cells
-e = 0 -- Empty Cells
+-- Top and Left rows are always completely filled with blocked cells
+
+x = block -- Blocked Cells
+e = empty -- Empty Cells
 
 puzzle :: Grid
 puzzle = [[x,x,x,x,x,x,x,x],
@@ -51,14 +55,14 @@ puzzle = [[x,x,x,x,x,x,x,x],
           [x,e,e,e,x,x,e,e]]
 
 solved :: Grid
-solved = [[0,0,0,0,0,0,0,0],
-          [0,9,7,0,0,8,7,9],
-          [0,8,9,0,8,9,5,7],
-          [0,6,8,5,9,7,0,0],
-          [0,0,6,1,0,2,6,0],
-          [0,0,0,4,6,1,3,2],
-          [0,8,9,3,1,0,1,4],
-          [0,3,1,2,0,0,2,1]]
+solved = [[x,x,x,x,x,x,x,x],
+          [x,9,7,x,x,8,7,9],
+          [x,8,9,x,8,9,5,7],
+          [x,6,8,5,9,7,x,x],
+          [x,x,6,1,x,2,6,x],
+          [x,x,x,4,6,1,3,2],
+          [x,8,9,3,1,x,1,4],
+          [x,3,1,2,x,x,2,1]]
 
 type Coordinate = (Int, Int) -- (x, y) starting from top left
 type Length = Int
@@ -94,8 +98,6 @@ constraints = [
     (Down (7,4) 3  7)]
 
 
-
-
 -- Constraints are 
 -- constraints = [
 --     (0,0, Across, 2, 16),
@@ -125,90 +127,52 @@ constraints = [
 -- ]
 
 
--- Check if a given board is valid
-valid :: Grid -> [Constraint] -> Bool
-valid g (c:cs) = all (sums g)   cs &&
-                 all (noDups g) cs
+{- Check Validity of a Solution  -}
+
+-- Check if a given solution is valid
+valid :: [Constraint] -> Grid -> Bool
+valid cs g = all (\c -> (sums c g) && (noDups c g)) cs
 
 -- Get values from grid corresponding to a constraint
-getVals :: Grid -> Constraint -> [Int]
-getVals g (Across (x,y) l _) = take l pos
+getVals :: Constraint -> Grid -> [Int]
+getVals (Across (x,y) l _) g = take l pos -- Take the values in the entry
     where 
-        row = g !! y
-        pos = drop (x+1) row
-getVals g (Down   (x,y) l _) = take l pos
+        row = g !! y -- Select row
+        pos = drop (x+1) row -- Move to the position after the constraint
+
+getVals (Down   (x,y) l _) g = take l pos -- Take the values in the entry
     where 
-        col = (transpose g) !! x
-        pos = drop (y+1) col
+        col = (transpose g) !! x -- Select column
+        pos = drop (y+1) col -- Move to the position after the constraint
 
-sums :: Grid -> Constraint -> Bool
-sums g c = (sum (getVals g c)) == (sumsTo c)
+-- Check if the sum condition of the constraint is satisfied
+sums :: Constraint -> Grid -> Bool
+sums c g = (sum (getVals c g)) == (sumsTo c)
 
-noDups :: Grid -> Constraint -> Bool
-noDups g c = not (hasDuplicates (getVals g c))
-
-{- Check correct -}
--- see if correct
--- enumerate all poss solutions
-
--- valid :: Grid -> Bool
--- valid g = all noDups (rows g) &&
---           all noDups (cols g) &&
---           all noDups (boxes g)
--- check to see if noDups is true when applied to each component
-
-
--- noDups :: Eq a => [a] -> Bool
--- noDups [] = True
--- noDups ( x : xt ) = not (elem x xt) && noDups xt
-
--- extract all rows, extract all col, all boxes and check all
--- rows :: Matrix a -> [Row a]
--- rows = id --identity function
-
--- cols :: Matrix a -> [Row a]
--- cols = transpose --built in function, turn all row into col, vice versa
-
--- -- alot of these functions are their own inverse
-
--- -- dot operator, function composition
--- -- h x = f (g x)
--- -- f . g = h
-
--- boxes :: Matrix a -> [Row a]
--- boxes = unpack . map cols . pack
---     where 
---         pack   = split . map split
---         split  = chop boxSize
---         unpack = map concat . concat
-
--- chop :: Int -> [a] -> [[a]]
--- chop n [] = []
--- chop n xs = take n xs : chop n (drop n xs)
+-- Check if the duplicate condition of the constraint is satisfied
+noDups :: Constraint -> Grid -> Bool
+noDups c g = not (hasDuplicates (getVals c g))
 
 {- Brute Force -}
--- type Choices = [Value]
 
--- -- matrix of choices
--- choices :: Grid -> Matrix Choices
--- -- choices is one fuzzy value- many
--- -- replace each empty cell with a list of all poss values
--- -- we want a list of concrete matricies- matrix with values in it
--- -- [Matrix Value]
--- choices g = map (map choice) g
---             where
---                 choice v = if empty v then values else [v]
+type Choices = [Value]
 
--- -- this changes matrix of choices to matrix with values
--- collapse :: Matrix [a] -> [Matrix a]
--- collapse = sequence . map sequence
--- --TODO function sequence
--- -- map seq over all rows
+-- Takes a grid and returns a grid containing the possible choices in each entry
+-- Kind of like penciling in the possible values
+choices :: Grid -> Matrix Choices
+choices g = map (map choice) g -- 2d map
+            where
+                choice v = if not (isBlocked v) then values else [v]
 
--- -- now check if all of the enumerations are correct
--- solveBrute :: Grid -> [Grid]
--- solveBrute = filter valid . collapse . choices
+-- Converts our matrix of choices from above into a huge list of possible matrices
+collapse :: Matrix [a] -> [Matrix a]
+collapse = sequence . map sequence
 
+-- Now filter our huge list of possible matrics down to those that are valid
+solveBrute :: [Constraint] -> Grid -> [Grid]
+solveBrute cs g = filter (valid cs) (collapse (choices g))
+
+-- Takes forever, big surprise!!
 
 -- {- Prune Second -}
 
