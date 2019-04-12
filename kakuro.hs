@@ -33,13 +33,13 @@ single _ = False
 
 {- Example puzzle, black squares in asterisks-}
 puzzle :: Grid
-puzzle = ["..*....",
-          "..*....",
-          ".....**",
-          "*..*..*",
-          "**.....",
-          "....*..",
-          "...**.."]
+puzzle = ["*..*....",
+          "...*....",
+          "........",
+          ".......*",
+          "*.......",
+          "*.......",
+          "....*..."]
 
 {- constraints are implmented as (x,y) coordinate of the topmost cell, ACROSS/DOWN, number of cells, then sum-}
 constraints = [
