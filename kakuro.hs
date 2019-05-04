@@ -3,7 +3,7 @@
 -- how to implement black squares?
 -- rewrite the checker
 
-
+import Debug.Trace
 import Data.List
 
 {- Types -}
@@ -65,9 +65,7 @@ solved = [[x,x,x,x,x,x,x,x],
           [x,3,1,2,x,x,2,1]]
 
 type Coordinate = (Int, Int) -- (x, y) starting from top left
-type Length = Int
-type SumsTo = Int
-data Constraint = Across {start :: Coordinate, length :: Int, sumsTo :: Int } | Down {start :: Coordinate, length :: Int, sumsTo :: Int}
+data Constraint = Across {start :: Coordinate, len :: Int, sumsTo :: Int } | Down {start :: Coordinate, len :: Int, sumsTo :: Int}
     deriving Show
 
 constraints = [
@@ -168,46 +166,101 @@ choices g = map (map choice) g -- 2d map
 collapse :: Matrix [a] -> [Matrix a]
 collapse = sequence . map sequence
 
--- Now filter our huge list of possible matrics down to those that are valid
+-- Now filter our huge list of possible matrices down to those that are valid
 solveBrute :: [Constraint] -> Grid -> [Grid]
 solveBrute cs g = filter (valid cs) (collapse (choices g))
 
 -- Takes forever, big surprise!!
 
--- {- Prune Second -}
+{- Prune Second -}
 
--- -- need to make better ^ way too slow
--- -- find which values are already in the row
--- -- dont need to put every option in each empty box- too many options and some are not valid
+-- Only want possible values that can sum to our constraint
+perfectNSum :: [Int] -> [Int] -> Int -> Int -> [[Int]]
+perfectNSum _      c 0 0 = [c]
+perfectNSum []     _ _ _ = []
+perfectNSum _      _ 0 _ = []
+perfectNSum _      _ _ 0 = []
+perfectNSum (v:vs) c s n = (perfectNSum vs (v:c) (s-v) (n-1)) ++ (perfectNSum vs c s n)
 
--- prune :: Matrix Choices -> Matrix Choices
--- -- extract all components, apply reduce function, remap all comp
--- -- has to do with f . map reduce . f
--- prune = pruneBy boxes . pruneBy cols . pruneBy rows
---         where pruneBy f = f . map reduce . f
+permuteListOfLists :: [[a]] -> [[a]]
+permuteListOfLists []     = []
+permuteListOfLists (x:xs) = (permutations x) ++ (permuteListOfLists xs)
 
--- reduce :: Row Choices -> Row Choices
--- -- single cell xs - xss is just one row
--- -- get rid of all the stuff already occured in the col- any singleton cell- need to GET
--- -- subtract all the singles out of the col
--- -- 'minus' infix notation- same as minus xs singles
--- reduce xss = [ xs `minus` singles | xs <- xss]
---             where singles = concat (filter single xss)
---             -- ret [v], need to concat
+-- Given Values, compute all possible combinations of n numbers that sum to s
+sumCombos :: Int -> Int -> [[Int]]
+sumCombos s n = permuteListOfLists (perfectNSum values [] s n)
 
--- --[x + y | x < [1, 2, 3], y <- [4, 5, 6]]
--- minus :: Choices -> Choices -> Choices
--- xs `minus` ys = if single xs then xs else xs \\ ys
 
--- solvePrune :: Grid -> [Grid]
--- solvePrune = filter valid . collapse . prune . choices
+prune :: [Constraint] -> Matrix Choices -> Matrix Choices
+prune []     g = g
+prune (c:cs) g = prune cs (pruneBy c g)
 
--- solveFixPrune :: Grid -> [Grid]
--- solveFixPrune = filter valid . collapse . fix prune . choices
+pruneBy :: Constraint -> Matrix Choices -> Matrix Choices
+pruneBy c g = updateChoices c vals g
+    where vals = map (nub) (transpose (sumCombos (sumsTo c) (len c)))
 
--- fix :: Eq a => (a -> a) -> a -> a
--- fix f x =  if x == x' then x else fix f x'
---            where x' = f x
+-- Disgusting
+updateChoices :: Constraint -> [Choices] ->  Matrix Choices -> Matrix Choices
+updateChoices (Across (x,y) n s) new g = 
+    before ++
+    [
+        beforeVals ++
+        (map (\(x,y) -> x `intersect` y) (zip new vals)) ++
+        afterVals
+    ] ++
+    after
+    where
+        m = g
+        before = take y m
+
+        row = m !! y
+        beforeVals = take (x+1) row
+        vals = take n (drop (x+1) (row))
+        afterVals = drop (x+n+1) row
+
+        after = drop (y+1) m
+
+updateChoices (Down   (x,y) n s) new g =
+    transpose (
+    before ++
+    [
+        beforeVals ++
+        (map (\(x,y) -> x `intersect` y) (zip new vals)) ++
+        afterVals
+    ] ++
+    after
+    )
+    where
+        m = transpose g
+        before = take x m
+
+        col = m !! x
+        beforeVals = take (y+1) col
+        vals = take n (drop (y+1) (col))
+        afterVals = drop (y+n+1) col
+
+        after = drop (x+1) m
+
+solvePrune :: [Constraint] -> Grid -> [Grid]      
+solvePrune cs g = filter (valid cs) (collapse (prune cs (choices g)))
+
+-- solved = [[x,x,x,x,x,x,x,x],
+--           [x,9,7,x,x,8,7,9],
+--           [x,8,9,x,8,9,5,7],
+--           [x,6,8,5,9,7,x,x],
+--           [x,x,6,1,x,2,6,x],
+--           [x,x,x,4,6,1,3,2],
+--           [x,8,9,3,1,x,1,4],
+--           [x,3,1,2,x,x,2,1]]
+
+-- [[[-1],[-1],[-1],[-1],[-1],[-1],[-1],[-1]],
+--  [[-1],[9],[9,7],[-1],[-1],[9,8,7],[9,8,7],[9,7]],
+--  [[-1],[8,9],[8,9],[-1],[9,8],[8,9,7,5],[9,8,5,7],[7,9]],
+--  [[-1],[6,9,8],[7,9,8,6],[5],[8,9],[7,9,8,6,5],[-1],[-1]],
+--  [[-1],[-1],[6],[4,5,3,2,1],[-1],[2,7,1,3,6,5],[6,3,2,1,5],[-1]],
+--  [[-1],[-1],[-1],[3,4,2,1],[6,1,2,4,3],[1,2,3,6,4],[3,6,2,1,4],[4,2,1]],
+--  [[-1],[9,2,8,3,7,4,6,5],[9,1,8,2,7,3,6,4],[2,5,3,4,1],[1,6,2,5,3,4],[-1],[2,3,1,4],[2,4,1]],
+--  [[-1],[2,3],[1,2,3],[1,2,3],[-1],[-1],[1,2],[1,2]]]
 
 -- {- Refine Third -}
 
