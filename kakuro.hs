@@ -65,7 +65,7 @@ solved = [[x,x,x,x,x,x,x,x],
           [x,3,1,2,x,x,2,1]]
 
 type Coordinate = (Int, Int) -- (x, y) starting from top left
-data Constraint = Across {start :: Coordinate, len :: Int, sumsTo :: Int } | Down {start :: Coordinate, len :: Int, sumsTo :: Int}
+data Constraint = Across {start :: Coordinate, clen :: Int, csum :: Int } | Down {start :: Coordinate, clen :: Int, csum :: Int}
     deriving Show
 
 constraints = [
@@ -129,10 +129,10 @@ constraints = [
 
 -- Check if a given solution is valid
 valid :: [Constraint] -> Grid -> Bool
-valid cs g = all (\c -> (sums c g) && (noDups c g)) cs
+valid cs g = all (\c -> (sumsTo c g) && (noDups c g)) cs
 
 -- Get values from grid corresponding to a constraint
-getVals :: Constraint -> Grid -> [Int]
+getVals :: Constraint -> Matrix a -> [a]
 getVals (Across (x,y) l _) g = take l pos -- Take the values in the entry
     where 
         row = g !! y -- Select row
@@ -144,8 +144,8 @@ getVals (Down   (x,y) l _) g = take l pos -- Take the values in the entry
         pos = drop (y+1) col -- Move to the position after the constraint
 
 -- Check if the sum condition of the constraint is satisfied
-sums :: Constraint -> Grid -> Bool
-sums c g = (sum (getVals c g)) == (sumsTo c)
+sumsTo :: Constraint -> Grid -> Bool
+sumsTo c g = (sum (getVals c g)) == (csum c)
 
 -- Check if the duplicate condition of the constraint is satisfied
 noDups :: Constraint -> Grid -> Bool
@@ -191,15 +191,36 @@ sumCombos :: Int -> Int -> [[Int]]
 sumCombos s n = permuteListOfLists (perfectNSum values [] s n)
 
 
+pruneSingles :: [Choices] -> [Choices]
+pruneSingles cs = map (\x -> x `minus` ss) cs
+    where ss = nub (concat (filter single cs))
+
+minus :: Choices -> Choices -> Choices
+minus a b = if single a then a else a \\ b
+
+
+fix :: Eq a => (a -> a) -> a -> a
+fix f x =  if x == x' then x else fix f x'
+           where x' = f x
+
+
 prune :: [Constraint] -> Matrix Choices -> Matrix Choices
 prune []     g = g
 prune (c:cs) g = prune cs (pruneBy c g)
 
 pruneBy :: Constraint -> Matrix Choices -> Matrix Choices
-pruneBy c g = updateChoices c vals g
-    where vals = map (nub) (transpose (sumCombos (sumsTo c) (len c)))
+pruneBy c = trace ("pruning singles") (singles c) . trace ("pruning sums") (sums c)
+
+sums :: Constraint -> Matrix Choices -> Matrix Choices
+sums c g = trace ("sums: " ++ show g) updateChoices c vals g
+    where vals = map (nub) (transpose (sumCombos (csum c) (clen c)))
+
+singles :: Constraint -> Matrix Choices -> Matrix Choices
+singles c g = trace ("singles: " ++ show g) updateChoices c vals g
+    where vals = pruneSingles (getVals c g)
 
 -- Disgusting
+-- Takes a constraint and replace the values in the constraint with those specified
 updateChoices :: Constraint -> [Choices] ->  Matrix Choices -> Matrix Choices
 updateChoices (Across (x,y) n s) new g = 
     before ++
@@ -241,8 +262,11 @@ updateChoices (Down   (x,y) n s) new g =
 
         after = drop (x+1) m
 
-solvePrune :: [Constraint] -> Grid -> [Grid]      
-solvePrune cs g = filter (valid cs) (collapse (prune cs (choices g)))
+solvePrune :: [Constraint] -> Grid -> [Grid]
+solvePrune cs = filter (valid cs) . collapse . (prune cs) . choices
+
+solveFixPrune :: [Constraint] -> Grid -> [Grid]      
+solveFixPrune cs g = filter (valid cs) . collapse . fix (prune cs) . choices g
 
 -- solved = [[x,x,x,x,x,x,x,x],
 --           [x,9,7,x,x,8,7,9],
@@ -262,7 +286,20 @@ solvePrune cs g = filter (valid cs) (collapse (prune cs (choices g)))
 --  [[-1],[9,2,8,3,7,4,6,5],[9,1,8,2,7,3,6,4],[2,5,3,4,1],[1,6,2,5,3,4],[-1],[2,3,1,4],[2,4,1]],
 --  [[-1],[2,3],[1,2,3],[1,2,3],[-1],[-1],[1,2],[1,2]]]
 
+-- STILL TOO SLOW 
+
 -- {- Refine Third -}
+
+-- [[[-1],[-1],[-1],[-1],[-1],[-1],[-1],[-1]],
+--  [[-1],[9],[7],[-1],[-1],[9,8],[9,8,7],[9,7]],
+--  [[-1],[8],[9],[-1],[8],[za9,5],[9,5,7],[7,9]],
+--  [[-1],[6],[8],[5],[9],[7],[-1],[-1]],
+--  [[-1],[-1],[6],[4,3,2,1],[-1],[2,1,3,6,5],[6,3,2,1,5],[-1]],
+--  [[-1],[-1],[-1],[3,4,2,1],[6,1,2,4,3],[1,2,3,6,4],[3,6,2,1,4],[4,2,1]],
+--  [[-1],[9,2,8,3,7,4,6,5],[9,1,8,2,7,3,6,4],[2,3,4,1],[1,6,2,5,3,4],[-1],[2,3,1,4],[2,4,1]],
+--  [[-1],[2,3],[1,2,3],[1,2,3],[-1],[-1],[1,2],[1,2]]]
+
+--  2 * 2 * 3 * 3 * 2 * 3 * 4 * 6 * 4 * 8 * 8 * 3 * 5 * 5 * 5 * 4 * 5 * 5 * 4 * 2 * 3 * 2 * 2 * 3 * 2 = 28665446400000
 
 -- -- still too slow ^
 
