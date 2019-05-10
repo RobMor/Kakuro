@@ -1,9 +1,5 @@
 -- kakuro
--- major changes are how to implement constraints
--- how to implement black squares?
--- rewrite the checker
 
-import Debug.Trace
 import Data.List
 
 {- Types -}
