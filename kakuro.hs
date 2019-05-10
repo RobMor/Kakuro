@@ -213,7 +213,7 @@ pruneBy c = (singles c) . (sums c)
 
 sums :: Constraint -> Matrix Choices -> Matrix Choices
 sums c g = updateChoices c vals (\(x,y) -> x `intersect` y) g
-    where vals = map (nub) (transpose (sumCombos (csum c) (clen c) (nub (concat (getVals c g)))))
+    where vals = map (nub) (transpose (sumCombos (csum c) (clen c) (nub (concat (getVals c g))))) -- Dirty af
 
 singles :: Constraint -> Matrix Choices -> Matrix Choices
 singles c g = updateChoices c vals (\(x,y) -> y) g
@@ -265,18 +265,6 @@ updateChoices (Down   (x,y) n s) new f g =
 solvePrune :: [Constraint] -> Grid -> [Grid]
 solvePrune cs = filter (valid cs) . collapse . (prune cs) . choices
 
-solveFixPrune :: [Constraint] -> Grid -> [Grid]      
-solveFixPrune cs = filter (valid cs) . collapse . fix (prune cs) . choices
-
--- solved = [[x,x,x,x,x,x,x,x],
---           [x,9,7,x,x,8,7,9],
---           [x,8,9,x,8,9,5,7],
---           [x,6,8,5,9,7,x,x],
---           [x,x,6,1,x,2,6,x],
---           [x,x,x,4,6,1,3,2],
---           [x,8,9,3,1,x,1,4],
---           [x,3,1,2,x,x,2,1]]
-
 -- [[[-1],[-1],[-1],[-1],[-1],[-1],[-1],[-1]],
 --  [[-1],[9],[9,7],[-1],[-1],[9,8,7],[9,8,7],[9,7]],
 --  [[-1],[8,9],[8,9],[-1],[9,8],[8,9,7,5],[9,8,5,7],[7,9]],
@@ -286,9 +274,10 @@ solveFixPrune cs = filter (valid cs) . collapse . fix (prune cs) . choices
 --  [[-1],[9,2,8,3,7,4,6,5],[9,1,8,2,7,3,6,4],[2,5,3,4,1],[1,6,2,5,3,4],[-1],[2,3,1,4],[2,4,1]],
 --  [[-1],[2,3],[1,2,3],[1,2,3],[-1],[-1],[1,2],[1,2]]]
 
--- STILL TOO SLOW 
+-- Too slow
 
--- {- Refine Third -}
+solveFixPrune :: [Constraint] -> Grid -> [Grid]      
+solveFixPrune cs = filter (valid cs) . collapse . fix (prune cs) . choices
 
 -- [[[-1],[-1],[-1],[-1],[-1],[-1],[-1],[-1]],
 --  [[-1],[9],[7],[-1],[-1],[9,8],[9,8,7],[9,7]],
@@ -301,30 +290,17 @@ solveFixPrune cs = filter (valid cs) . collapse . fix (prune cs) . choices
 
 --  2 * 2 * 3 * 3 * 2 * 3 * 4 * 6 * 4 * 8 * 8 * 3 * 5 * 5 * 5 * 4 * 5 * 5 * 4 * 2 * 3 * 2 * 2 * 3 * 2 = 28665446400000
 
--- -- still too slow ^
+-- STILL TOO SLOW 
 
--- Set one to single, then prune singles until fix point
+-- {- Refine Third -}
 
+-- Same process here as sudoku...
 search :: [Constraint] -> Matrix Choices -> [Grid]
 search cs m
     | blocked cs m  = []
     | complete m = collapse m
     | otherwise  = [g | m' <- guesses m
                       , g  <- search cs (fix (prune cs) m')]
-
-
--- solve :: Grid -> [Grid]
--- solve = search . prune . choices
-
--- search :: Matrix Choices -> [Grid]
--- search m
---     | blocked m   = []
---     | complete m = collapse m
---     -- some sells w nondeterministic entries
---     -- choose one sell, fix each of the options
---     -- after fixed, do more pruning
---     | otherwise  = [g | m' <- guesses m
---                        , g <- search (prune m')]
 
 guesses :: Matrix Choices -> [Matrix Choices]
 guesses m =
@@ -352,9 +328,12 @@ noDups' (x : xt) = not (elem x xt) && noDups' xt
 consistent :: Row Choices -> Bool
 consistent = noDups' . concat . filter single
 
-
 solve :: [Constraint] -> Grid -> [Grid]
 solve cs = filter (valid cs). search cs . fix (prune cs) . choices
 
+
+prettyPrint :: Grid -> IO ()
+prettyPrint = putStrLn . unlines . map (concat . map (\x -> if x < 0 then " X" else " " ++ show x))
+
 main :: IO ()
-main = (putStrLn . unlines . map (concat . map (\x -> if x < 0 then " X" else " " ++ show x)) . head . (solve constraints)) puzzle
+main = (prettyPrint . head . (solve constraints)) puzzle
