@@ -96,35 +96,6 @@ constraints = [
     (Down (7,4) 3  7)]
 
 
--- Constraints are 
--- constraints = [
---     (0,0, Across, 2, 16),
---     (1,0, Across, 2, 17),
---     (2,0, Across, 5, 35),
---     (0,4, Across, 3, 24),
---     (1,3, Across, 4, 29),
---     (3,1, Across, 2, 7),
---     (3,4, Across, 2, 8),
---     (4,2, Across, 5, 16),
---     (5,0, Across, 4, 21),
---     (5,5, Across, 2, 5),
---     (6,0, Across, 3, 6),
---     (6,5, Across, 2, 3),
---     (0,0, Down, 3, 23),
---     (5,0, Down, 2, 11),
---     (0,1, Down, 4, 30),
---     (5,1, Down, 2, 10),
---     (2,2, Down, 5, 15),
---     (1,3, Down, 2, 17),
---     (4,3, Down, 2, 7),
---     (0,4, Down, 5, 27),
---     (0,5, Down, 2, 12),
---     (3,5, Down, 4, 12),
---     (0,6, Down, 2, 16),
---     (4,6, Down, 3, 7)
--- ]
-
-
 {- Check Validity of a Solution  -}
 
 -- Check if a given solution is valid
@@ -332,8 +303,76 @@ solve :: [Constraint] -> Grid -> [Grid]
 solve cs = filter (valid cs). search cs . fix (prune cs) . choices
 
 
+hardPuzzle :: Grid
+hardPuzzle = [[x,x,x,x,x,x,x,x,x,x],
+              [x,e,e,x,e,e,x,x,e,e],
+              [x,e,e,x,e,e,e,e,e,e],
+              [x,e,e,e,e,x,e,e,e,e],
+              [x,x,x,e,e,e,e,e,e,e],
+              [x,e,e,x,e,e,x,e,e,x],
+              [x,e,e,x,e,e,e,x,e,e],
+              [x,x,e,e,x,e,e,x,e,e],
+              [x,e,e,e,e,e,e,e,x,x],
+              [x,e,e,e,e,x,e,e,e,e],
+              [x,e,e,e,e,e,e,x,e,e],
+              [x,e,e,x,x,e,e,x,e,e]]
+
+hardConstraints :: [Constraint]
+hardConstraints = [
+    (Across (0, 1) 2 13),
+    (Across (0, 2) 2  4),
+    (Across (0, 3) 4 14),
+    (Across (0, 5) 2 13),
+    (Across (0, 6) 2  3),
+    (Across (0, 8) 7 29),
+    (Across (0, 9) 4 17),
+    (Across (0,10) 6 38),
+    (Across (0,11) 2  3),
+    (Across (1, 7) 2  4),
+    (Across (2, 4) 7 31),
+    (Across (3, 1) 2  9),
+    (Across (3, 2) 6 38),
+    (Across (3, 5) 2 16),
+    (Across (3, 6) 3 21),
+    (Across (4, 7) 2  8),
+    (Across (4,11) 2 13),
+    (Across (5, 3) 4 12),
+    (Across (5, 9) 4 29),
+    (Across (6, 5) 2  4),
+    (Across (7, 1) 2  9),
+    (Across (7, 6) 2  8),
+    (Across (7, 7) 2  3),
+    (Across (7,10) 2 10),
+    (Across (7,11) 2  9),
+
+    (Down (1, 0) 3  7),
+    (Down (1, 4) 2 11),
+    (Down (1, 7) 4 11),
+    (Down (2, 0) 3 16),
+    (Down (2, 4) 7 29),
+    (Down (3, 2) 2 13),
+    (Down (3, 6) 4 16),
+    (Down (4, 0) 6 22),
+    (Down (4, 7) 3 17),
+    (Down (5, 0) 2 10),
+    (Down (5, 3) 5 34),
+    (Down (5, 9) 2 16),
+    (Down (6, 1) 3  9),
+    (Down (6, 5) 6 24),
+    (Down (7, 1) 4 13),
+    (Down (7, 7) 2 14),
+    (Down (8, 0) 7 29),
+    (Down (8, 8) 3 10),
+    (Down (9, 0) 4 29),
+    (Down (9, 5) 2  4),
+    (Down (9, 8) 3 24)]
+
+
 prettyPrint :: Grid -> IO ()
 prettyPrint = putStrLn . unlines . map (concat . map (\x -> if x < 0 then " X" else " " ++ show x))
 
+solveDisplay :: [Constraint] -> Grid -> IO ()
+solveDisplay cs g = (prettyPrint . head . (solve cs)) g
+
 main :: IO ()
-main = (prettyPrint . head . (solve constraints)) puzzle
+main = solveDisplay constraints puzzle
