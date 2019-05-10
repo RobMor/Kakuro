@@ -187,8 +187,8 @@ permuteListOfLists []     = []
 permuteListOfLists (x:xs) = (permutations x) ++ (permuteListOfLists xs)
 
 -- Given Values, compute all possible combinations of n numbers that sum to s
-sumCombos :: Int -> Int -> [[Int]]
-sumCombos s n = permuteListOfLists (perfectNSum values [] s n)
+sumCombos :: Int -> Int -> [Int] -> [[Int]]
+sumCombos s n v = permuteListOfLists (perfectNSum v [] s n)
 
 
 pruneSingles :: [Choices] -> [Choices]
@@ -209,24 +209,24 @@ prune []     g = g
 prune (c:cs) g = prune cs (pruneBy c g)
 
 pruneBy :: Constraint -> Matrix Choices -> Matrix Choices
-pruneBy c = trace ("pruning singles") (singles c) . trace ("pruning sums") (sums c)
+pruneBy c = (singles c) . (sums c)
 
 sums :: Constraint -> Matrix Choices -> Matrix Choices
-sums c g = trace ("sums: " ++ show g) updateChoices c vals g
-    where vals = map (nub) (transpose (sumCombos (csum c) (clen c)))
+sums c g = updateChoices c vals (\(x,y) -> x `intersect` y) g
+    where vals = map (nub) (transpose (sumCombos (csum c) (clen c) (nub (concat (getVals c g)))))
 
 singles :: Constraint -> Matrix Choices -> Matrix Choices
-singles c g = trace ("singles: " ++ show g) updateChoices c vals g
+singles c g = updateChoices c vals (\(x,y) -> y) g
     where vals = pruneSingles (getVals c g)
 
 -- Disgusting
 -- Takes a constraint and replace the values in the constraint with those specified
-updateChoices :: Constraint -> [Choices] ->  Matrix Choices -> Matrix Choices
-updateChoices (Across (x,y) n s) new g = 
+updateChoices :: Constraint -> [Choices] -> ((Choices, Choices) -> Choices) -> Matrix Choices -> Matrix Choices
+updateChoices (Across (x,y) n s) new f g = 
     before ++
     [
         beforeVals ++
-        (map (\(x,y) -> x `intersect` y) (zip new vals)) ++
+        (map f (zip vals new)) ++
         afterVals
     ] ++
     after
@@ -241,12 +241,12 @@ updateChoices (Across (x,y) n s) new g =
 
         after = drop (y+1) m
 
-updateChoices (Down   (x,y) n s) new g =
+updateChoices (Down   (x,y) n s) new f g =
     transpose (
     before ++
     [
         beforeVals ++
-        (map (\(x,y) -> x `intersect` y) (zip new vals)) ++
+        (map f (zip vals new)) ++
         afterVals
     ] ++
     after
@@ -266,7 +266,7 @@ solvePrune :: [Constraint] -> Grid -> [Grid]
 solvePrune cs = filter (valid cs) . collapse . (prune cs) . choices
 
 solveFixPrune :: [Constraint] -> Grid -> [Grid]      
-solveFixPrune cs g = filter (valid cs) . collapse . fix (prune cs) . choices g
+solveFixPrune cs = filter (valid cs) . collapse . fix (prune cs) . choices
 
 -- solved = [[x,x,x,x,x,x,x,x],
 --           [x,9,7,x,x,8,7,9],
@@ -292,7 +292,7 @@ solveFixPrune cs g = filter (valid cs) . collapse . fix (prune cs) . choices g
 
 -- [[[-1],[-1],[-1],[-1],[-1],[-1],[-1],[-1]],
 --  [[-1],[9],[7],[-1],[-1],[9,8],[9,8,7],[9,7]],
---  [[-1],[8],[9],[-1],[8],[za9,5],[9,5,7],[7,9]],
+--  [[-1],[8],[9],[-1],[8],[9,5],[9,5,7],[7,9]],
 --  [[-1],[6],[8],[5],[9],[7],[-1],[-1]],
 --  [[-1],[-1],[6],[4,3,2,1],[-1],[2,1,3,6,5],[6,3,2,1,5],[-1]],
 --  [[-1],[-1],[-1],[3,4,2,1],[6,1,2,4,3],[1,2,3,6,4],[3,6,2,1,4],[4,2,1]],
@@ -302,6 +302,16 @@ solveFixPrune cs g = filter (valid cs) . collapse . fix (prune cs) . choices g
 --  2 * 2 * 3 * 3 * 2 * 3 * 4 * 6 * 4 * 8 * 8 * 3 * 5 * 5 * 5 * 4 * 5 * 5 * 4 * 2 * 3 * 2 * 2 * 3 * 2 = 28665446400000
 
 -- -- still too slow ^
+
+-- Set one to single, then prune singles until fix point
+
+search :: [Constraint] -> Matrix Choices -> [Grid]
+search cs m
+    | blocked cs m  = []
+    | complete m = collapse m
+    | otherwise  = [g | m' <- guesses m
+                      , g  <- search cs (fix (prune cs) m')]
+
 
 -- solve :: Grid -> [Grid]
 -- solve = search . prune . choices
@@ -316,40 +326,35 @@ solveFixPrune cs g = filter (valid cs) . collapse . fix (prune cs) . choices g
 --     | otherwise  = [g | m' <- guesses m
 --                        , g <- search (prune m')]
 
--- guesses :: Matrix Choices -> [Matrix Choices]
--- -- decompost matric into peices
--- -- get single cell out to manipuate
--- -- reconstruct the matric w the new choice
--- guesses m = 
---   [rows1 ++ [row1 ++ [c] : row2] ++ rows2 | c <- cs]
---   where
---       -- rows 1 filled, rows atleast 1 not filled
---       (rows1, row : rows2) = break (any (not . single)) m
---       -- need correct element- do on row itself- find cell itself
---       (row1, cs : row2)    = break (not . single) row
---       -- list comp to make choice
+guesses :: Matrix Choices -> [Matrix Choices]
+guesses m =
+  [rows1 ++ [row1 ++ [c] : row2] ++ rows2 | c <- cs]
+  where
+    (rows1, row : rows2) = break (any (not . single)) m
+    (row1, cs : row2)    = break (not . single) row
 
--- complete :: Matrix Choices -> Bool
--- complete = all (all single)
+complete :: Matrix Choices -> Bool
+complete = all (all single)
 
--- blocked :: Matrix Choices -> Bool
--- blocked m = void m || not (safe m)
+blocked :: [Constraint] -> Matrix Choices -> Bool
+blocked cs m = void m || not (safe cs m)
 
--- void :: Matrix Choices -> Bool
--- void = any (any null)
+void :: Matrix Choices -> Bool
+void = any (any null)
 
--- safe :: Matrix Choices -> Bool
--- safe cm = all consistent (rows cm) &&
---           all consistent (cols cm) &&
---           all consistent (boxes cm)
+safe :: [Constraint] -> Matrix Choices -> Bool
+safe cs m = all (consistent . (\c -> getVals c m)) cs
 
--- consistent :: Row Choices -> Bool
--- consistent = noDups . concat . filter single
+noDups' :: Eq a => [a] -> Bool
+noDups' [] = True
+noDups' (x : xt) = not (elem x xt) && noDups' xt
 
--- main :: IO ()
--- main = (putStrLn . unlines . head . solve) puzzle
+consistent :: Row Choices -> Bool
+consistent = noDups' . concat . filter single
 
 
--- -- comp everything is a single, check
--- -- blcoked one choice empty, or u have an inconsistency
--- -- guesses make the nondeterminstic choice
+solve :: [Constraint] -> Grid -> [Grid]
+solve cs = filter (valid cs). search cs . fix (prune cs) . choices
+
+main :: IO ()
+main = (putStrLn . unlines . map (concat . map (\x -> if x < 0 then " X" else " " ++ show x)) . head . (solve constraints)) puzzle
